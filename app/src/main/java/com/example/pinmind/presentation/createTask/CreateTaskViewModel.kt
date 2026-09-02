@@ -14,6 +14,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -23,7 +25,7 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class CreateTaskViewModel @Inject constructor(
-    savedStateHandle: SavedStateHandle,
+    private val savedStateHandle: SavedStateHandle,
     private val createTaskUseCase: CreateTaskUseCase,
     private val updateTaskUseCase: UpdateTaskUseCase,
     private val getTaskByIdUseCase: GetTaskByIdUseCase
@@ -33,46 +35,82 @@ class CreateTaskViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(CreateTaskUiState(taskId = taskId))
     val uiState: StateFlow<CreateTaskUiState> = _uiState.asStateFlow()
 
+    private var originalTask: Task? = null
+
     init {
         taskId?.let { id ->
             loadTask(id)
         }
 
         viewModelScope.launch {
-            savedStateHandle.getStateFlow<Double?>("picked_lat", null).collect { lat ->
-                val lng = savedStateHandle.get<Double>("picked_lng")
-                val radius = savedStateHandle.get<Float>("picked_radius") ?: 100f
-                val name = savedStateHandle.get<String>("picked_name") ?: ""
-                val address = savedStateHandle.get<String>("picked_address")
-
-                if (lat != null && lng != null) {
-                    onLocationUpdated(
-                        GeoLocation(
-                            latitude = lat,
-                            longitude = lng,
-                            radiusMeters = radius,
-                            locationName = name,
-                            address = address
-                        )
-                    )
+            // Observe savedStateHandle for location updates passed back from MapPicker
+            merge(
+                savedStateHandle.getStateFlow<Double?>("latitude", null),
+                savedStateHandle.getStateFlow<Double?>("longitude", null),
+                savedStateHandle.getStateFlow<String?>("address", null),
+                savedStateHandle.getStateFlow<Double?>("picked_lat", null),
+                savedStateHandle.getStateFlow<Double?>("picked_lng", null),
+                savedStateHandle.getStateFlow<String?>("picked_address", null)
+            ).collect {
+                extractLocationFromSavedStateHandle()?.let { location ->
+                    onLocationUpdated(location)
                 }
             }
         }
     }
 
+    private fun extractLocationFromSavedStateHandle(): GeoLocation? {
+        val lat = savedStateHandle.get<Double>("latitude")
+            ?: savedStateHandle.get<Double>("picked_lat")
+            ?: savedStateHandle.get<String>("latitude")?.toDoubleOrNull()
+            ?: savedStateHandle.get<String>("picked_lat")?.toDoubleOrNull()
+
+        val lng = savedStateHandle.get<Double>("longitude")
+            ?: savedStateHandle.get<Double>("picked_lng")
+            ?: savedStateHandle.get<String>("longitude")?.toDoubleOrNull()
+            ?: savedStateHandle.get<String>("picked_lng")?.toDoubleOrNull()
+
+        if (lat == null || lng == null) return null
+
+        val radius = savedStateHandle.get<Float>("radius")
+            ?: savedStateHandle.get<Float>("picked_radius")
+            ?: savedStateHandle.get<Double>("radius")?.toFloat()
+            ?: savedStateHandle.get<Double>("picked_radius")?.toFloat()
+            ?: savedStateHandle.get<String>("radius")?.toFloatOrNull()
+            ?: savedStateHandle.get<String>("picked_radius")?.toFloatOrNull()
+            ?: _uiState.value.geoLocation?.radiusMeters
+            ?: 100f
+
+        val address = savedStateHandle.get<String>("address")
+            ?: savedStateHandle.get<String>("picked_address")
+
+        val name = savedStateHandle.get<String>("location_name")
+            ?: savedStateHandle.get<String>("picked_name")
+            ?: address
+            ?: "Selected Location"
+
+        return GeoLocation(
+            latitude = lat,
+            longitude = lng,
+            radiusMeters = radius,
+            locationName = name,
+            address = address
+        )
+    }
 
     private fun loadTask(id: Long) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            getTaskByIdUseCase(id).collect { task ->
+            getTaskByIdUseCase(id).take(1).collect { task ->
                 if (task != null) {
+                    originalTask = task
                     _uiState.update { current ->
                         current.copy(
-                            title = task.title,
-                            description = task.description,
-                            category = task.category,
+                            title = current.title.ifBlank { task.title },
+                            description = current.description.ifBlank { task.description },
+                            category = if (current.category == "General") task.category else current.category,
                             priority = task.priority,
-                            geoLocation = task.geoLocation,
+                            geoLocation = current.geoLocation ?: task.geoLocation,
                             transitionType = task.transitionType,
                             dwellTimeSeconds = task.dwellTimeSeconds,
                             isLoading = false
@@ -105,6 +143,24 @@ class CreateTaskViewModel @Inject constructor(
         _uiState.update { it.copy(geoLocation = location) }
     }
 
+    fun updateLocation(
+        latitude: Double,
+        longitude: Double,
+        address: String? = null,
+        radius: Float = 100f,
+        name: String? = null
+    ) {
+        onLocationUpdated(
+            GeoLocation(
+                latitude = latitude,
+                longitude = longitude,
+                radiusMeters = radius,
+                locationName = name ?: address ?: "Selected Location",
+                address = address
+            )
+        )
+    }
+
     fun onTransitionTypeChanged(type: GeofenceTransitionType) {
         _uiState.update { it.copy(transitionType = type) }
     }
@@ -123,7 +179,7 @@ class CreateTaskViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
 
-            val task = Task(
+            val task = (originalTask ?: Task(id = state.taskId ?: 0L, title = state.title)).copy(
                 id = state.taskId ?: 0L,
                 title = state.title.trim(),
                 description = state.description.trim(),

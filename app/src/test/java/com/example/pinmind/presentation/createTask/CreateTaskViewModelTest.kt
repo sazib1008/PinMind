@@ -114,4 +114,99 @@ class CreateTaskViewModelTest {
         val updated = fakeRepository.getTaskByIdOnce(42L)
         assertEquals("Updated Title", updated?.title)
     }
+
+    @Test
+    fun `initial location in savedStateHandle updates task state with attached location`() = runTest {
+        val savedStateHandle = SavedStateHandle(
+            mapOf(
+                "latitude" to 37.7749,
+                "longitude" to -122.4194,
+                "address" to "123 Market St, San Francisco",
+                "radius" to 150f
+            )
+        )
+        val viewModel = CreateTaskViewModel(
+            savedStateHandle = savedStateHandle,
+            createTaskUseCase = createTaskUseCase,
+            updateTaskUseCase = updateTaskUseCase,
+            getTaskByIdUseCase = getTaskByIdUseCase
+        )
+
+        viewModel.uiState.test {
+            val state = awaitItem()
+            assertNotNull(state.geoLocation)
+            assertEquals(37.7749, state.geoLocation!!.latitude, 0.0001)
+            assertEquals(-122.4194, state.geoLocation!!.longitude, 0.0001)
+            assertEquals("123 Market St, San Francisco", state.geoLocation!!.address)
+            assertEquals(150f, state.geoLocation!!.radiusMeters, 0.01f)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `setting location in savedStateHandle dynamically updates task state with attached location`() = runTest {
+        val savedStateHandle = SavedStateHandle()
+        val viewModel = CreateTaskViewModel(
+            savedStateHandle = savedStateHandle,
+            createTaskUseCase = createTaskUseCase,
+            updateTaskUseCase = updateTaskUseCase,
+            getTaskByIdUseCase = getTaskByIdUseCase
+        )
+
+        viewModel.uiState.test {
+            val initial = awaitItem()
+            assertEquals(null, initial.geoLocation)
+
+            // Simulate returning from PickLocationScreen where metadata and coordinates are set
+            savedStateHandle["address"] = "New York, NY"
+            savedStateHandle["latitude"] = 40.7128
+            savedStateHandle["longitude"] = -74.0060
+
+            testScheduler.runCurrent()
+
+            val updated = awaitItem()
+            assertNotNull(updated.geoLocation)
+            assertEquals(40.7128, updated.geoLocation!!.latitude, 0.0001)
+            assertEquals(-74.0060, updated.geoLocation!!.longitude, 0.0001)
+            assertEquals("New York, NY", updated.geoLocation!!.address)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `saving edited task with attached location persists location to repository for Task Details`() = runTest {
+        val existingTask = Task(
+            id = 10L,
+            title = "Office Errand",
+            geoLocation = null
+        )
+        fakeRepository.insertTask(existingTask)
+
+        val savedStateHandle = SavedStateHandle(mapOf("taskId" to 10L))
+        val viewModel = CreateTaskViewModel(
+            savedStateHandle = savedStateHandle,
+            createTaskUseCase = createTaskUseCase,
+            updateTaskUseCase = updateTaskUseCase,
+            getTaskByIdUseCase = getTaskByIdUseCase
+        )
+
+        // Set location via savedStateHandle as done by PickLocationScreen
+        savedStateHandle["latitude"] = 37.7749
+        savedStateHandle["longitude"] = -122.4194
+        savedStateHandle["address"] = "Market St, San Francisco"
+
+        testScheduler.advanceUntilIdle()
+
+        viewModel.saveTask()
+        testScheduler.advanceUntilIdle()
+
+        // Verify task persisted in repository has the attached location
+        val persisted = fakeRepository.getTaskByIdOnce(10L)
+        assertNotNull(persisted)
+        assertNotNull(persisted?.geoLocation)
+        assertEquals(37.7749, persisted!!.geoLocation!!.latitude, 0.0001)
+        assertEquals(-122.4194, persisted.geoLocation!!.longitude, 0.0001)
+        assertEquals("Market St, San Francisco", persisted.geoLocation!!.address)
+    }
 }
+

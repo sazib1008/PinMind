@@ -47,6 +47,8 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.navigation.NavController
+import kotlinx.coroutines.flow.merge
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -67,11 +69,60 @@ import com.example.pinmind.domain.model.TaskPriority
 fun CreateTaskScreen(
     onNavigateBack: () -> Unit,
     onNavigateToMapPicker: (Double?, Double?, Float?) -> Unit,
+    navController: NavController? = null,
     viewModel: CreateTaskViewModel = hiltViewModel(),
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // Observe savedStateHandle changes from PickLocationScreen
+    val currentBackStackEntry = navController?.currentBackStackEntry
+    LaunchedEffect(currentBackStackEntry) {
+        val handle = currentBackStackEntry?.savedStateHandle ?: return@LaunchedEffect
+        merge(
+            handle.getStateFlow<Double?>("latitude", null),
+            handle.getStateFlow<Double?>("longitude", null),
+            handle.getStateFlow<String?>("address", null),
+            handle.getStateFlow<Double?>("picked_lat", null),
+            handle.getStateFlow<Double?>("picked_lng", null),
+            handle.getStateFlow<String?>("picked_address", null)
+        ).collect {
+            val lat = handle.get<Double>("latitude")
+                ?: handle.get<Double>("picked_lat")
+                ?: handle.get<String>("latitude")?.toDoubleOrNull()
+                ?: handle.get<String>("picked_lat")?.toDoubleOrNull()
+
+            val lng = handle.get<Double>("longitude")
+                ?: handle.get<Double>("picked_lng")
+                ?: handle.get<String>("longitude")?.toDoubleOrNull()
+                ?: handle.get<String>("picked_lng")?.toDoubleOrNull()
+
+            if (lat != null && lng != null) {
+                val radius = handle.get<Float>("radius")
+                    ?: handle.get<Float>("picked_radius")
+                    ?: handle.get<Double>("radius")?.toFloat()
+                    ?: handle.get<Double>("picked_radius")?.toFloat()
+                    ?: 100f
+
+                val address = handle.get<String>("address")
+                    ?: handle.get<String>("picked_address")
+
+                val name = handle.get<String>("location_name")
+                    ?: handle.get<String>("picked_name")
+                    ?: address
+                    ?: "Selected Location"
+
+                viewModel.updateLocation(
+                    latitude = lat,
+                    longitude = lng,
+                    address = address,
+                    radius = radius,
+                    name = name
+                )
+            }
+        }
+    }
 
     LaunchedEffect(uiState.isSaved) {
         if (uiState.isSaved) {
@@ -345,3 +396,44 @@ fun CreateTaskScreen(
         }
     }
 }
+
+/**
+ * AddTaskScreen for creating a new task, with savedStateHandle location listener.
+ */
+@Composable
+fun AddTaskScreen(
+    onNavigateBack: () -> Unit,
+    onNavigateToMapPicker: (Double?, Double?, Float?) -> Unit,
+    navController: NavController? = null,
+    viewModel: CreateTaskViewModel = hiltViewModel(),
+    modifier: Modifier = Modifier
+) {
+    CreateTaskScreen(
+        onNavigateBack = onNavigateBack,
+        onNavigateToMapPicker = onNavigateToMapPicker,
+        navController = navController,
+        viewModel = viewModel,
+        modifier = modifier
+    )
+}
+
+/**
+ * EditTaskScreen for editing an existing task, with savedStateHandle location listener.
+ */
+@Composable
+fun EditTaskScreen(
+    onNavigateBack: () -> Unit,
+    onNavigateToMapPicker: (Double?, Double?, Float?) -> Unit,
+    navController: NavController? = null,
+    viewModel: CreateTaskViewModel = hiltViewModel(),
+    modifier: Modifier = Modifier
+) {
+    CreateTaskScreen(
+        onNavigateBack = onNavigateBack,
+        onNavigateToMapPicker = onNavigateToMapPicker,
+        navController = navController,
+        viewModel = viewModel,
+        modifier = modifier
+    )
+}
+

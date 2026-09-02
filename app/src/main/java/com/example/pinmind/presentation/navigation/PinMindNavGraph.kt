@@ -51,7 +51,8 @@ fun PinMindNavGraph(
 
 
         composable(Screen.CreateTask.route) {
-            CreateTaskScreen(
+            com.example.pinmind.presentation.createTask.AddTaskScreen(
+                navController = navController,
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToMapPicker = { lat, lng, radius ->
                     navController.navigate(Screen.MapPicker.createRoute(lat, lng, radius))
@@ -65,7 +66,8 @@ fun PinMindNavGraph(
                 navArgument("taskId") { type = NavType.LongType }
             )
         ) {
-            CreateTaskScreen(
+            com.example.pinmind.presentation.createTask.EditTaskScreen(
+                navController = navController,
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToMapPicker = { lat, lng, radius ->
                     navController.navigate(Screen.MapPicker.createRoute(lat, lng, radius))
@@ -108,14 +110,20 @@ fun PinMindNavGraph(
             )
         ) {
             com.example.pinmind.presentation.map.LocationPickerScreen(
+                navController = navController,
                 onNavigateBack = { navController.popBackStack() },
                 onLocationConfirmed = { location ->
                     navController.previousBackStackEntry?.savedStateHandle?.apply {
-                        set("picked_lat", location.latitude)
-                        set("picked_lng", location.longitude)
+                        set("address", location.address)
+                        set("radius", location.radiusMeters)
+                        set("location_name", location.locationName)
+                        set("picked_address", location.address)
                         set("picked_radius", location.radiusMeters)
                         set("picked_name", location.locationName)
-                        set("picked_address", location.address)
+                        set("picked_lat", location.latitude)
+                        set("picked_lng", location.longitude)
+                        set("latitude", location.latitude)
+                        set("longitude", location.longitude)
                     }
                     navController.popBackStack()
                 }

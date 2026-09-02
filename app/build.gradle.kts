@@ -19,10 +19,9 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        manifestPlaceholders["MAPS_API_KEY"] = ""
-
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
+
 
 
     buildTypes {
@@ -72,10 +71,10 @@ dependencies {
     ksp(libs.hilt.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
 
-    // Play Services Location & Maps
+    // Play Services Location & OpenStreetMap
     implementation(libs.play.services.location)
-    implementation(libs.play.services.maps)
-    implementation(libs.maps.compose)
+    implementation(libs.osmdroid.android)
+
 
     // WorkManager
     implementation(libs.androidx.work.runtime.ktx)

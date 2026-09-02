@@ -15,8 +15,10 @@ import dagger.hilt.android.AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        org.osmdroid.config.Configuration.getInstance().userAgentValue = "PinMindApp/1.0 (${packageName})"
         enableEdgeToEdge()
         setContent {
+
             PinMindTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     PinMindNavGraph()
