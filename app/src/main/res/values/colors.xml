@@ -7,4 +7,11 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    
+    <!-- PinMind Brand Colors -->
+    <color name="pin_red">#E8503A</color>       <!-- পিন লাল: মার্ক, ট্রিগার মোমেন্ট -->
+    <color name="pin_red_deep">#C63A26</color>  <!-- প্রেসড স্টেট / ডিপ অ্যাসেন্ট -->
+    <color name="ink">#201912</color>           <!-- কালি: টাইপোগ্রাফি -->
+    <color name="cream">#FAF4E6</color>         <!-- ক্রিম: মার্কের উল্টো রং -->
+    <color name="ic_launcher_background">#E8503A</color>
 </resources>

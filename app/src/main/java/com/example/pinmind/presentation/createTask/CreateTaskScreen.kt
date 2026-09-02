@@ -48,18 +48,24 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.navigation.NavController
-import kotlinx.coroutines.flow.merge
+import android.os.Build
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.pinmind.R
+import com.example.pinmind.core.notification.NotificationPermissionHelper
 import com.example.pinmind.domain.model.GeoLocation
 import com.example.pinmind.domain.model.TaskPriority
+import com.example.pinmind.presentation.permission.NotificationPermissionRationaleDialog
+import kotlinx.coroutines.flow.merge
 
 /**
  * Screen for creating a new task or editing an existing task.
@@ -73,8 +79,38 @@ fun CreateTaskScreen(
     viewModel: CreateTaskViewModel = hiltViewModel(),
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    var showNotificationRationale by remember { mutableStateOf(false) }
+    var pendingActionAfterPermission by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    val checkNotificationPermissionAndProceed: (() -> Unit) -> Unit = { onGranted ->
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !NotificationPermissionHelper.hasNotificationPermission(context)
+        ) {
+            pendingActionAfterPermission = onGranted
+            showNotificationRationale = true
+        } else {
+            onGranted()
+        }
+    }
+
+    if (showNotificationRationale) {
+        NotificationPermissionRationaleDialog(
+            onPermissionResult = {
+                showNotificationRationale = false
+                pendingActionAfterPermission?.invoke()
+                pendingActionAfterPermission = null
+            },
+            onDismiss = {
+                showNotificationRationale = false
+                pendingActionAfterPermission?.invoke()
+                pendingActionAfterPermission = null
+            }
+        )
+    }
 
     // Observe savedStateHandle changes from PickLocationScreen
     val currentBackStackEntry = navController?.currentBackStackEntry
@@ -347,11 +383,13 @@ fun CreateTaskScreen(
 
                             OutlinedButton(
                                 onClick = {
-                                    onNavigateToMapPicker(
-                                        location.latitude,
-                                        location.longitude,
-                                        location.radiusMeters
-                                    )
+                                    checkNotificationPermissionAndProceed {
+                                        onNavigateToMapPicker(
+                                            location.latitude,
+                                            location.longitude,
+                                            location.radiusMeters
+                                        )
+                                    }
                                 },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
@@ -363,7 +401,11 @@ fun CreateTaskScreen(
                     }
                 } else {
                     OutlinedButton(
-                        onClick = { onNavigateToMapPicker(null, null, null) },
+                        onClick = {
+                            checkNotificationPermissionAndProceed {
+                                onNavigateToMapPicker(null, null, null)
+                            }
+                        },
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -377,7 +419,15 @@ fun CreateTaskScreen(
 
                 // Save Action Button
                 Button(
-                    onClick = viewModel::saveTask,
+                    onClick = {
+                        if (uiState.geoLocation != null) {
+                            checkNotificationPermissionAndProceed {
+                                viewModel.saveTask()
+                            }
+                        } else {
+                            viewModel.saveTask()
+                        }
+                    },
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
                         .fillMaxWidth()

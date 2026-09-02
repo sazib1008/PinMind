@@ -1,5 +1,6 @@
 package com.example.pinmind.presentation.map
 
+import android.os.Build
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -20,6 +21,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
+import com.example.pinmind.core.notification.NotificationPermissionHelper
+import com.example.pinmind.presentation.permission.NotificationPermissionRationaleDialog
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -201,6 +204,70 @@ fun LocationPickerScreen(
     }
 
     var showRadiusSheet by remember { mutableStateOf(false) }
+    var showNotificationRationale by remember { mutableStateOf(false) }
+
+    val confirmLocation: () -> Unit = {
+        val currentLoc = uiState.selectedLocation
+        val lat = currentLoc?.latitude ?: mapView.mapCenter.latitude
+        val lng = currentLoc?.longitude ?: mapView.mapCenter.longitude
+        val radius = uiState.radiusMeters
+        val name = currentLoc?.locationName?.ifBlank { null } ?: "Selected Location"
+        val address = currentLoc?.address ?: name
+
+        val confirmedLoc = GeoLocation(
+            latitude = lat,
+            longitude = lng,
+            radiusMeters = radius,
+            locationName = name,
+            address = address
+        )
+
+        navController?.previousBackStackEntry?.savedStateHandle?.let { handle ->
+            handle["address"] = confirmedLoc.address
+            handle["radius"] = confirmedLoc.radiusMeters
+            handle["location_name"] = confirmedLoc.locationName
+            handle["picked_address"] = confirmedLoc.address
+            handle["picked_radius"] = confirmedLoc.radiusMeters
+            handle["picked_name"] = confirmedLoc.locationName
+            handle["picked_lat"] = confirmedLoc.latitude
+            handle["picked_lng"] = confirmedLoc.longitude
+            handle["latitude"] = confirmedLoc.latitude
+            handle["longitude"] = confirmedLoc.longitude
+        }
+
+        val deviceLoc = uiState.currentDeviceLocation
+        if (deviceLoc != null) {
+            val distResults = FloatArray(1)
+            android.location.Location.distanceBetween(
+                deviceLoc.latitude, deviceLoc.longitude,
+                confirmedLoc.latitude, confirmedLoc.longitude,
+                distResults
+            )
+            val dist = distResults[0]
+            if (dist <= confirmedLoc.radiusMeters) {
+                android.widget.Toast.makeText(
+                    context,
+                    "📍 Inside reminder radius (${dist.toInt()}m <= ${confirmedLoc.radiusMeters.toInt()}m). Reminder will trigger upon saving task!",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+
+        onLocationConfirmed(confirmedLoc)
+    }
+
+    if (showNotificationRationale) {
+        NotificationPermissionRationaleDialog(
+            onPermissionResult = {
+                showNotificationRationale = false
+                confirmLocation()
+            },
+            onDismiss = {
+                showNotificationRationale = false
+                confirmLocation()
+            }
+        )
+    }
 
     Box(
         modifier = modifier.fillMaxSize()
@@ -538,35 +605,13 @@ fun LocationPickerScreen(
                     // Confirm Button taking remaining weight
                     Button(
                         onClick = {
-                            val currentLoc = uiState.selectedLocation
-                            val lat = currentLoc?.latitude ?: mapView.mapCenter.latitude
-                            val lng = currentLoc?.longitude ?: mapView.mapCenter.longitude
-                            val radius = uiState.radiusMeters
-                            val name = currentLoc?.locationName?.ifBlank { null } ?: "Selected Location"
-                            val address = currentLoc?.address ?: name
-
-                            val confirmedLoc = GeoLocation(
-                                latitude = lat,
-                                longitude = lng,
-                                radiusMeters = radius,
-                                locationName = name,
-                                address = address
-                            )
-
-                            navController?.previousBackStackEntry?.savedStateHandle?.let { handle ->
-                                handle["address"] = confirmedLoc.address
-                                handle["radius"] = confirmedLoc.radiusMeters
-                                handle["location_name"] = confirmedLoc.locationName
-                                handle["picked_address"] = confirmedLoc.address
-                                handle["picked_radius"] = confirmedLoc.radiusMeters
-                                handle["picked_name"] = confirmedLoc.locationName
-                                handle["picked_lat"] = confirmedLoc.latitude
-                                handle["picked_lng"] = confirmedLoc.longitude
-                                handle["latitude"] = confirmedLoc.latitude
-                                handle["longitude"] = confirmedLoc.longitude
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                !NotificationPermissionHelper.hasNotificationPermission(context)
+                            ) {
+                                showNotificationRationale = true
+                            } else {
+                                confirmLocation()
                             }
-
-                            onLocationConfirmed(confirmedLoc)
                         },
                         enabled = uiState.selectedLocation != null || mapView.mapCenter != null,
                         shape = RoundedCornerShape(12.dp),

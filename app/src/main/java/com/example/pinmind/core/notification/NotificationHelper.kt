@@ -1,17 +1,16 @@
 package com.example.pinmind.core.notification
 
-import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.graphics.Color
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat
 import com.example.pinmind.MainActivity
 import com.example.pinmind.R
 import com.example.pinmind.domain.model.Task
@@ -32,6 +31,7 @@ class NotificationHelper @Inject constructor(
         const val ACTION_MARK_DONE = "com.example.pinmind.ACTION_MARK_DONE"
         const val EXTRA_TASK_ID = "extra_task_id"
         const val EXTRA_NOTIFICATION_ID = "extra_notification_id"
+        val VIBRATION_PATTERN = longArrayOf(0, 300, 200, 300)
     }
 
     init {
@@ -40,15 +40,22 @@ class NotificationHelper @Inject constructor(
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val name = "Location Task Reminders"
-            val descriptionText = "Notifications fired when you enter a task's reminder radius"
+            val name = context.getString(R.string.notif_channel_location)
+            val descriptionText = context.getString(R.string.notif_channel_location_desc)
             val importance = NotificationManager.IMPORTANCE_HIGH
+            val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            val audioAttributes = AudioAttributes.Builder()
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
+                .build()
+
             val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {
                 description = descriptionText
                 enableLights(true)
                 lightColor = Color.BLUE
                 enableVibration(true)
-                vibrationPattern = longArrayOf(0, 300, 200, 300)
+                vibrationPattern = VIBRATION_PATTERN
+                setSound(defaultSoundUri, audioAttributes)
             }
 
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -57,25 +64,26 @@ class NotificationHelper @Inject constructor(
     }
 
     /**
-     * Shows a reminder notification for the triggered [Task].
+     * Builds and posts a rich heads-up notification for a geofence trigger.
      */
-    fun showTaskReminderNotification(task: Task) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.POST_NOTIFICATIONS
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                return
-            }
+    fun showTaskGeofenceNotification(
+        taskId: Long,
+        title: String,
+        description: String,
+        category: String,
+        locationName: String
+    ) {
+        if (!NotificationPermissionHelper.hasNotificationPermission(context)) {
+            return
         }
 
-        val notificationId = task.id.toInt()
+        val notificationId = taskId.toInt()
+        val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
 
-        // Tap content intent -> Opens MainActivity
+        // Content Intent: Tap on body launches MainActivity with EXTRA_TASK_ID
         val contentIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra(EXTRA_TASK_ID, task.id)
+            putExtra(EXTRA_TASK_ID, taskId)
         }
         val contentPendingIntent = PendingIntent.getActivity(
             context,
@@ -84,10 +92,10 @@ class NotificationHelper @Inject constructor(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Action "Mark as Done" intent
+        // Action Button: "Mark as Complete" intent pointing to NotificationActionReceiver
         val doneIntent = Intent(context, NotificationActionReceiver::class.java).apply {
             action = ACTION_MARK_DONE
-            putExtra(EXTRA_TASK_ID, task.id)
+            putExtra(EXTRA_TASK_ID, taskId)
             putExtra(EXTRA_NOTIFICATION_ID, notificationId)
         }
         val donePendingIntent = PendingIntent.getBroadcast(
@@ -97,37 +105,53 @@ class NotificationHelper @Inject constructor(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val locationText = task.geoLocation?.locationName?.ifBlank { null }
-            ?: task.geoLocation?.address
-            ?: "Nearby"
-
-        val bodyText = if (task.description.isNotBlank()) {
-            "📍 $locationText • ${task.description}"
+        val bodyText = if (description.isNotBlank()) {
+            "📍 $locationName • $description"
         } else {
-            "📍 Arrived at $locationText"
+            "📍 Arrived at $locationName"
         }
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle(task.title)
+            .setSmallIcon(R.drawable.ic_location_pin)
+            .setContentTitle(title)
             .setContentText(bodyText)
             .setStyle(
                 NotificationCompat.BigTextStyle()
                     .bigText(bodyText)
-                    .setSummaryText(task.category)
+                    .setSummaryText(category.ifBlank { "Reminder" })
             )
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setAutoCancel(true)
+            .setSound(defaultSoundUri)
+            .setVibrate(VIBRATION_PATTERN)
+            .setLights(Color.BLUE, 500, 500)
             .setContentIntent(contentPendingIntent)
             .addAction(
-                R.mipmap.ic_launcher,
-                context.getString(R.string.action_mark_complete),
+                R.drawable.ic_check,
+                context.getString(R.string.notif_action_complete),
                 donePendingIntent
             )
             .build()
 
         NotificationManagerCompat.from(context).notify(notificationId, notification)
+    }
+
+    /**
+     * Shows a reminder notification for the triggered [Task], delegating to [showTaskGeofenceNotification].
+     */
+    fun showTaskReminderNotification(task: Task) {
+        val locationText = task.geoLocation?.locationName?.ifBlank { null }
+            ?: task.geoLocation?.address
+            ?: "Nearby"
+
+        showTaskGeofenceNotification(
+            taskId = task.id,
+            title = task.title,
+            description = task.description,
+            category = task.category,
+            locationName = locationText
+        )
     }
 
     /**
@@ -137,3 +161,4 @@ class NotificationHelper @Inject constructor(
         NotificationManagerCompat.from(context).cancel(notificationId)
     }
 }
+

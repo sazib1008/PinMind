@@ -5,9 +5,12 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.util.Log
+import com.example.pinmind.core.notification.NotificationHelper
 import com.example.pinmind.domain.location.GeofenceController
 import com.example.pinmind.domain.model.GeofenceTransitionType
 import com.example.pinmind.domain.model.Task
+import com.example.pinmind.domain.model.TaskStatus
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingClient
 import com.google.android.gms.location.GeofencingRequest
@@ -23,12 +26,18 @@ import javax.inject.Singleton
  * Enforces platform constraints:
  * - OS-managed [PendingIntent] / [GeofenceBroadcastReceiver] (resistant to OEM background service kills).
  * - Default to ENTER + DWELL transitions with configurable dwell time to avoid false drive-by triggers.
+ * - Immediate proximity evaluation on registration so notifications fire when already inside radius.
  */
 @Singleton
 class GeofenceManager @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val locationClient: LocationClient,
+    private val notificationHelper: NotificationHelper
 ) : GeofenceController {
 
+    companion object {
+        private const val TAG = "GeofenceManager"
+    }
 
     private val geofencingClient: GeofencingClient by lazy {
         LocationServices.getGeofencingClient(context)
@@ -92,15 +101,55 @@ class GeofenceManager @Inject constructor(
         }
 
         val request = GeofencingRequest.Builder()
-            .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER or GeofencingRequest.INITIAL_TRIGGER_DWELL)
+            .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER)
             .addGeofences(geofenceList)
             .build()
 
-        return try {
+        try {
             geofencingClient.addGeofences(request, geofencePendingIntent).await()
-            Result.success(Unit)
+            Log.d(TAG, "Successfully registered ${geofenceList.size} geofences with Google Play Services")
         } catch (e: Exception) {
-            Result.failure(e)
+            Log.e(TAG, "Failed to register geofences with Google Play Services", e)
+        }
+
+        // Proactive Proximity Check:
+        // If the user's current device location is already inside any of the registered tasks' radius,
+        // trigger the reminder notification immediately.
+        checkImmediateProximity(geofenceTasks)
+
+        return Result.success(Unit)
+    }
+
+    private suspend fun checkImmediateProximity(tasks: List<Task>) {
+        try {
+            val currentLoc = locationClient.getCurrentLocation()
+            if (currentLoc == null) {
+                Log.w(TAG, "Cannot check immediate proximity: Current device location is null")
+                return
+            }
+
+            for (task in tasks) {
+                if (task.status != TaskStatus.ACTIVE) continue
+                val targetLoc = task.geoLocation ?: continue
+                val distanceResults = FloatArray(1)
+                android.location.Location.distanceBetween(
+                    currentLoc.latitude, currentLoc.longitude,
+                    targetLoc.latitude, targetLoc.longitude,
+                    distanceResults
+                )
+                val distanceMeters = distanceResults[0]
+                Log.d(
+                    TAG,
+                    "Task ${task.id} ('${task.title}'): Distance is ${distanceMeters.toInt()}m, target radius is ${targetLoc.radiusMeters.toInt()}m"
+                )
+
+                if (distanceMeters <= targetLoc.radiusMeters) {
+                    Log.d(TAG, "Device is ALREADY inside radius for task ${task.id}. Firing notification!")
+                    notificationHelper.showTaskReminderNotification(task)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking immediate proximity for registered geofences", e)
         }
     }
 

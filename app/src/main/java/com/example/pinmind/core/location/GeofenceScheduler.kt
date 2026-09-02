@@ -57,7 +57,7 @@ class GeofenceScheduler @Inject constructor(
             }
 
             val tasksToRegister: List<Task> = if (userLoc != null) {
-                // Rank tasks by distance to user location
+                // Rank tasks by distance to user location and limit to tasks within 20km
                 activeTasks
                     .map { task ->
                         val loc = task.geoLocation!!
@@ -69,6 +69,7 @@ class GeofenceScheduler @Inject constructor(
                         )
                         task to dist
                     }
+                    .filter { it.second <= MAX_RELEVANT_DISTANCE_METERS }
                     .sortedBy { it.second }
                     .take(MAX_ACTIVE_GEOFENCES)
                     .map { it.first }

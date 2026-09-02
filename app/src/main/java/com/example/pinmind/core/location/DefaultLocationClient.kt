@@ -31,6 +31,15 @@ class DefaultLocationClient @Inject constructor(
         }
 
         return try {
+            val last = client.lastLocation.await()
+            if (last != null) {
+                return GeoLocation(
+                    latitude = last.latitude,
+                    longitude = last.longitude,
+                    radiusMeters = 100f
+                )
+            }
+
             val location = client.getCurrentLocation(
                 Priority.PRIORITY_HIGH_ACCURACY,
                 null

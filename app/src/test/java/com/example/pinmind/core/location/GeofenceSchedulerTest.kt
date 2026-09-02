@@ -43,7 +43,7 @@ class GeofenceSchedulerTest {
     }
 
     @Test
-    fun `scheduleClosestGeofences prioritizes closer tasks over far tasks`() = runTest {
+    fun `scheduleClosestGeofences filters out tasks beyond 20km and registers close tasks`() = runTest {
         val userLocation = GeoLocation(latitude = 37.7749, longitude = -122.4194, radiusMeters = 100f) // San Francisco
 
         val closeTask = Task(
@@ -64,9 +64,9 @@ class GeofenceSchedulerTest {
         val result = scheduler.scheduleClosestGeofences(referenceLocation = userLocation)
 
         assertTrue(result.isSuccess)
-        assertEquals(2, result.getOrNull())
+        assertEquals(1, result.getOrNull())
         assertTrue(fakeGeofenceController.registeredTaskIds.contains(1L))
-        assertTrue(fakeGeofenceController.registeredTaskIds.contains(2L))
+        assertTrue(!fakeGeofenceController.registeredTaskIds.contains(2L))
     }
 
     @Test

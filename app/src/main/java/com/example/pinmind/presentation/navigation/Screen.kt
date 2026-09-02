@@ -4,6 +4,7 @@ package com.example.pinmind.presentation.navigation
  * Type-safe navigation routes for PinMind.
  */
 sealed class Screen(val route: String) {
+    data object Splash : Screen("splash")
     data object Home : Screen("home")
     data object CreateTask : Screen("create_task")
     data object EditTask : Screen("edit_task/{taskId}") {

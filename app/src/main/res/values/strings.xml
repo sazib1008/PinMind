@@ -110,4 +110,18 @@
     <string name="battery_opt_dismiss">Later</string>
     <string name="battery_banner_title">Reminders may be delayed</string>
     <string name="battery_banner_desc">Battery optimization is active. Tap to allow background triggers.</string>
+
+    <!-- Notification Permission (Android 13+) -->
+    <string name="notification_permission_title">Notification Access Needed</string>
+    <string name="notification_permission_rationale">PinMind uses high-priority notifications to alert you the instant you arrive at your reminder destination. Without notification permission, you will not receive task alerts.</string>
+    <string name="action_grant_permission">Allow Notifications</string>
+    <string name="action_not_now">Not Now</string>
+
+    <!-- Splash Screen -->
+    <string name="splash_badge">Offline • On-Device • Privacy First</string>
+
+    <!-- Notification Strings -->
+    <string name="notif_channel_location">লোকেশন রিমাইন্ডার</string>
+    <string name="notif_channel_location_desc">নির্ধারিত স্থানে প্রবেশ করলে রিমাইন্ডার জানায়</string>
+    <string name="notif_action_complete">সম্পন্ন হিসেবে চিহ্নিত করুন</string>
 </resources>
