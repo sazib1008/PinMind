@@ -5,8 +5,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.pinmind.core.location.LocationPermissionState
 import com.example.pinmind.domain.model.GeoLocation
+import com.example.pinmind.domain.model.SearchLocationResult
 import com.example.pinmind.domain.usecase.GetCurrentLocationUseCase
 import com.example.pinmind.domain.usecase.ReverseGeocodeUseCase
+import com.example.pinmind.domain.usecase.SearchLocationUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -18,13 +20,14 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * ViewModel handling map interaction, reverse-geocoding, radius updates, and location selection.
+ * ViewModel handling map interaction, reverse-geocoding, search auto-complete, radius updates, and location selection.
  */
 @HiltViewModel
 class MapViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val getCurrentLocationUseCase: GetCurrentLocationUseCase,
-    private val reverseGeocodeUseCase: ReverseGeocodeUseCase
+    private val reverseGeocodeUseCase: ReverseGeocodeUseCase,
+    private val searchLocationUseCase: SearchLocationUseCase
 ) : ViewModel() {
 
     private val initialLat: Double? = savedStateHandle.get<String>("lat")?.toDoubleOrNull()
@@ -48,6 +51,7 @@ class MapViewModel @Inject constructor(
     val uiState: StateFlow<MapUiState> = _uiState.asStateFlow()
 
     private var geocodeJob: Job? = null
+    private var searchJob: Job? = null
 
     init {
         if (initialLat != null && initialLng != null) {
@@ -55,6 +59,61 @@ class MapViewModel @Inject constructor(
         } else {
             fetchDeviceLocation()
         }
+    }
+
+    fun onSearchQueryChanged(query: String) {
+        _uiState.update { it.copy(searchQuery = query) }
+        searchJob?.cancel()
+        if (query.trim().length < 2) {
+            _uiState.update { it.copy(searchResults = emptyList(), isSearching = false) }
+            return
+        }
+        searchJob = viewModelScope.launch {
+            delay(400) // Debounce rapid keystrokes
+            _uiState.update { it.copy(isSearching = true) }
+            val results = searchLocationUseCase(query)
+            _uiState.update { it.copy(searchResults = results, isSearching = false) }
+        }
+    }
+
+    fun onSearchResultSelected(result: SearchLocationResult) {
+        _uiState.update { current ->
+            current.copy(
+                searchQuery = result.shortName,
+                searchResults = emptyList(),
+                isSearching = false,
+                selectedLocation = GeoLocation(
+                    latitude = result.latitude,
+                    longitude = result.longitude,
+                    radiusMeters = current.radiusMeters,
+                    locationName = result.shortName,
+                    address = result.displayName
+                )
+            )
+        }
+    }
+
+    fun clearSearch() {
+        searchJob?.cancel()
+        _uiState.update { it.copy(searchQuery = "", searchResults = emptyList(), isSearching = false) }
+    }
+
+    fun onMapCenterChanged(latitude: Double, longitude: Double) {
+        val currentRadius = _uiState.value.radiusMeters
+        _uiState.update { current ->
+            current.copy(
+                selectedLocation = (current.selectedLocation ?: GeoLocation(
+                    latitude = latitude,
+                    longitude = longitude,
+                    radiusMeters = currentRadius
+                )).copy(
+                    latitude = latitude,
+                    longitude = longitude,
+                    radiusMeters = currentRadius
+                )
+            )
+        }
+        resolveLocationDetails(latitude, longitude, currentRadius)
     }
 
     fun onPermissionStateUpdated(state: LocationPermissionState) {

@@ -109,7 +109,7 @@ fun PinMindNavGraph(
                 }
             )
         ) {
-            com.example.pinmind.presentation.map.LocationPickerScreen(
+            com.example.pinmind.presentation.map.PickLocationScreen(
                 navController = navController,
                 onNavigateBack = { navController.popBackStack() },
                 onLocationConfirmed = { location ->

@@ -83,6 +83,7 @@
     <string name="cd_task_checkbox">Toggle task status</string>
     <string name="cd_location_icon">Task has location attached</string>
     <string name="cd_filter">Filter tasks</string>
+    <string name="cd_clear">Clear text</string>
 
     <!-- Permissions Flow (Two-Step on Android 10+) -->
     <string name="perm_foreground_title">Location Access Needed</string>

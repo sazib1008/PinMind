@@ -3,6 +3,7 @@ package com.example.pinmind.presentation.map
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,27 +12,34 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -50,6 +58,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -113,6 +123,8 @@ fun LocationPickerScreen(
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     val primaryColor = MaterialTheme.colorScheme.primary
     val primaryArgb = primaryColor.toArgb()
@@ -217,14 +229,17 @@ fun LocationPickerScreen(
                         addMapListener(object : MapListener {
                             override fun onScroll(event: ScrollEvent?): Boolean {
                                 val center = mapCenter
-                                isMapDragging = true
-                                viewModel.onMapTapped(center.latitude, center.longitude)
+                                if (center != null) {
+                                    viewModel.onMapCenterChanged(center.latitude, center.longitude)
+                                }
                                 return true
                             }
 
                             override fun onZoom(event: ZoomEvent?): Boolean {
                                 val center = mapCenter
-                                viewModel.onMapTapped(center.latitude, center.longitude)
+                                if (center != null) {
+                                    viewModel.onMapCenterChanged(center.latitude, center.longitude)
+                                }
                                 return true
                             }
                         })
@@ -233,7 +248,7 @@ fun LocationPickerScreen(
                         val tapOverlay = MapEventsOverlay(object : MapEventsReceiver {
                             override fun singleTapConfirmedHelper(p: GeoPoint): Boolean {
                                 controller.animateTo(p)
-                                viewModel.onMapTapped(p.latitude, p.longitude)
+                                viewModel.onMapCenterChanged(p.latitude, p.longitude)
                                 return true
                             }
 
@@ -251,13 +266,14 @@ fun LocationPickerScreen(
                     }
                 },
                 update = { view ->
-                    // Update geofence radius polygon
+                    // Update geofence radius polygon centered at current target center
                     view.overlays.removeAll { it is Polygon }
 
-                    uiState.selectedLocation?.let { loc ->
-                        val centerPoint = GeoPoint(loc.latitude, loc.longitude)
+                    val center = view.mapCenter
+                    if (center != null) {
+                        val centerPoint = GeoPoint(center.latitude, center.longitude)
                         val circlePolygon = Polygon(view).apply {
-                            points = Polygon.pointsAsCircle(centerPoint, loc.radiusMeters.toDouble())
+                            points = Polygon.pointsAsCircle(centerPoint, uiState.radiusMeters.toDouble())
                             fillPaint.color = circleFillArgb
                             outlinePaint.color = primaryArgb
                             outlinePaint.strokeWidth = 4f
@@ -268,11 +284,9 @@ fun LocationPickerScreen(
                 }
             )
 
-            // Centered Target Pin Overlay (Fixed at map center with target shadow)
+            // Fixed Center-Target Pin directly over the center of the map
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(bottom = 200.dp), // Offsets center above bottom card
+                modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
                 Column(
@@ -284,33 +298,119 @@ fun LocationPickerScreen(
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier
-                            .size(48.dp)
-                            .offset(y = (-12).dp)
+                            .size(44.dp)
+                            .offset(y = (-22).dp)
                     )
-                    // Target Dot
+                    // Target Dot at exact center
                     Box(
                         modifier = Modifier
-                            .size(8.dp)
+                            .size(6.dp)
                             .background(MaterialTheme.colorScheme.primary, CircleShape)
                     )
                 }
             }
 
-            // Top Instruction Pill
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-                shadowElevation = 4.dp,
+            // Top Floating Search Bar with Auto-Complete Dropdown
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
                 modifier = Modifier
+                    .fillMaxWidth()
                     .align(Alignment.TopCenter)
                     .padding(16.dp)
             ) {
-                Text(
-                    text = stringResource(R.string.map_tap_instruction),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                )
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(
+                        value = uiState.searchQuery,
+                        onValueChange = viewModel::onSearchQueryChanged,
+                        placeholder = {
+                            Text(
+                                text = stringResource(R.string.map_search_hint),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Filled.Search,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        },
+                        trailingIcon = {
+                            if (uiState.isSearching) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            } else if (uiState.searchQuery.isNotEmpty()) {
+                                IconButton(onClick = viewModel::clearSearch) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Close,
+                                        contentDescription = stringResource(R.string.cd_clear)
+                                    )
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    // Auto-complete suggestions list
+                    if (uiState.searchResults.isNotEmpty()) {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 220.dp)
+                        ) {
+                            items(uiState.searchResults) { result ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            keyboardController?.hide()
+                                            focusManager.clearFocus()
+                                            viewModel.onSearchResultSelected(result)
+                                            mapView.controller.setZoom(17.0)
+                                            mapView.controller.animateTo(
+                                                GeoPoint(result.latitude, result.longitude)
+                                            )
+                                        }
+                                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.LocationOn,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = result.shortName,
+                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = result.displayName,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
             // GPS Re-center FAB
@@ -321,6 +421,9 @@ fun LocationPickerScreen(
                         viewModel.requestPermissionFlow()
                     } else {
                         viewModel.fetchDeviceLocation()
+                        uiState.currentDeviceLocation?.let { loc ->
+                            mapView.controller.animateTo(GeoPoint(loc.latitude, loc.longitude))
+                        }
                     }
                 },
                 containerColor = MaterialTheme.colorScheme.surface,
@@ -328,7 +431,7 @@ fun LocationPickerScreen(
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = 240.dp)
+                    .padding(end = 16.dp, bottom = 260.dp)
             ) {
                 Icon(
                     imageVector = Icons.Filled.MyLocation,
