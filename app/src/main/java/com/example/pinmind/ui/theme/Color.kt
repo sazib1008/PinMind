@@ -2,54 +2,68 @@ package com.example.pinmind.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Primary Indigo / Deep Blue
-val IndigoPrimaryLight = Color(0xFF2B5BE8)
-val IndigoOnPrimaryLight = Color(0xFFFFFFFF)
-val IndigoPrimaryContainerLight = Color(0xFFDDE1FF)
-val IndigoOnPrimaryContainerLight = Color(0xFF001453)
+// ==========================================
+// PinMind Brand Palette (Red, Cream, Ink)
+// ==========================================
+val PinRed = Color(0xFFE8503A)         // Primary Brand Red: Pins, CTAs, Triggers
+val PinRedDeep = Color(0xFFC63A26)     // Deep Pressed / Secondary Red
+val Ink = Color(0xFF201912)            // Deep Ink Charcoal: Typography & Dark Surface
+val Cream = Color(0xFFFAF4E6)          // Warm Cream: Light Background
+val CreamVariant = Color(0xFFF3EBD9)   // Warm Surface Variant: Chips & Borders
+val CreamSurface = Color(0xFFFFFDF8)   // Pure Card Surface
 
-val IndigoPrimaryDark = Color(0xFFB8C4FF)
-val IndigoOnPrimaryDark = Color(0xFF002685)
-val IndigoPrimaryContainerDark = Color(0xFF003AB6)
-val IndigoOnPrimaryContainerDark = Color(0xFFDDE1FF)
+// --- Light Theme Colors ---
+val PrimaryLight = PinRed
+val OnPrimaryLight = Color(0xFFFFFFFF)
+val PrimaryContainerLight = Color(0xFFFFDAD4)
+val OnPrimaryContainerLight = Color(0xFF410001)
 
-// Secondary Teal / Mint
-val TealSecondaryLight = Color(0xFF006A60)
-val TealOnSecondaryLight = Color(0xFFFFFFFF)
-val TealSecondaryContainerLight = Color(0xFF71F7E4)
-val TealOnSecondaryContainerLight = Color(0xFF00201C)
+val SecondaryLight = PinRedDeep
+val OnSecondaryLight = Color(0xFFFFFFFF)
+val SecondaryContainerLight = CreamVariant
+val OnSecondaryContainerLight = Ink
 
-val TealSecondaryDark = Color(0xFF50DBC8)
-val TealOnSecondaryDark = Color(0xFF003731)
-val TealSecondaryContainerDark = Color(0xFF005048)
-val TealOnSecondaryContainerDark = Color(0xFF71F7E4)
+val TertiaryLight = Color(0xFF8B5000)
+val OnTertiaryLight = Color(0xFFFFFFFF)
+val TertiaryContainerLight = Color(0xFFFFDCC0)
+val OnTertiaryContainerLight = Color(0xFF2C1600)
 
-// Tertiary Amber / Coral
-val AmberTertiaryLight = Color(0xFF8B5000)
-val AmberOnTertiaryLight = Color(0xFFFFFFFF)
-val AmberTertiaryContainerLight = Color(0xFFFFDCC0)
-val AmberOnTertiaryContainerLight = Color(0xFF2C1600)
+val BackgroundLight = Cream
+val OnBackgroundLight = Ink
+val SurfaceLight = CreamSurface
+val OnSurfaceLight = Ink
+val SurfaceVariantLight = CreamVariant
+val OnSurfaceVariantLight = Color(0xFF56473D)
+val OutlineLight = Color(0xFF8B776A)
+val OutlineVariantLight = Color(0xFFDCCFBE)
 
-val AmberTertiaryDark = Color(0xFFFFB777)
-val AmberOnTertiaryDark = Color(0xFF4A2800)
-val AmberTertiaryContainerDark = Color(0xFF693C00)
-val AmberOnTertiaryContainerDark = Color(0xFFFFDCC0)
+// --- Dark Theme Colors ---
+val PrimaryDark = Color(0xFFFF8978)       // Vibrant warm coral red
+val OnPrimaryDark = Color(0xFF621006)
+val PrimaryContainerDark = Color(0xFF881F12)
+val OnPrimaryContainerDark = Color(0xFFFFDAD4)
 
-// Neutral Backgrounds & Surfaces
-val BackgroundLight = Color(0xFFF9F9FE)
-val SurfaceLight = Color(0xFFFFFFFF)
-val SurfaceVariantLight = Color(0xFFE2E2EC)
-val OnSurfaceLight = Color(0xFF191C20)
-val OnSurfaceVariantLight = Color(0xFF45464F)
+val SecondaryDark = Color(0xFFE5BDB5)
+val OnSecondaryDark = Color(0xFF442823)
+val SecondaryContainerDark = Color(0xFF382923)
+val OnSecondaryContainerDark = Cream
 
-val BackgroundDark = Color(0xFF111318)
-val SurfaceDark = Color(0xFF191C20)
-val SurfaceVariantDark = Color(0xFF45464F)
-val OnSurfaceDark = Color(0xFFE2E2E9)
-val OnSurfaceVariantDark = Color(0xFFC5C6D0)
+val TertiaryDark = Color(0xFFFFB777)
+val OnTertiaryDark = Color(0xFF4A2800)
+val TertiaryContainerDark = Color(0xFF693C00)
+val OnTertiaryContainerDark = Color(0xFFFFDCC0)
 
-// Priority accent colors
-val PriorityLowColor = Color(0xFF4CAF50)
-val PriorityMediumColor = Color(0xFFFF9800)
-val PriorityHighColor = Color(0xFFF44336)
-val PriorityUrgentColor = Color(0xFF9C27B0)
+val BackgroundDark = Color(0xFF16110D)   // Deepest ink black-brown
+val OnBackgroundDark = Cream
+val SurfaceDark = Ink                    // Brand Ink (#201912)
+val OnSurfaceDark = Cream
+val SurfaceVariantDark = Color(0xFF322820)
+val OnSurfaceVariantDark = Color(0xFFD6C3B7)
+val OutlineDark = Color(0xFF9E8C80)
+val OutlineVariantDark = Color(0xFF52443B)
+
+// Priority Accent Colors
+val PriorityLowColor = Color(0xFF388E3C)
+val PriorityMediumColor = Color(0xFFF57C00)
+val PriorityHighColor = Color(0xFFE8503A)    // PinRed
+val PriorityUrgentColor = Color(0xFF8E24AA)
